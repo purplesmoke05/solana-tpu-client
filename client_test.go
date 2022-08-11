@@ -3,7 +3,9 @@ package solana_tpu_client
 import (
 	"context"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/test-go/testify/assert"
+	"golang.org/x/sync/errgroup"
 	"testing"
 )
 
@@ -57,4 +59,30 @@ func TestLeaderTpuCache(t *testing.T) {
 		tpuEndpoints := leaderTpuCache.getLeaderSockets(0)
 		assert.NotZero(t, len(tpuEndpoints))
 	})
+}
+
+func TestRecentLeaderSlots(t *testing.T) {
+	ctx := context.Background()
+	rpcClient := rpc.New(TEST_RPC_ENDPOINT)
+
+	info, err := rpcClient.GetEpochInfo(ctx, "")
+	assert.Nil(t, err)
+
+	t.Run("Constructor", func(t *testing.T) {
+		_ = NewRecentLeaderSlots(info.AbsoluteSlot)
+	})
+}
+
+func TestLeaderTpuService(t *testing.T) {
+	ctx := context.Background()
+	rpcClient := rpc.New(TEST_RPC_ENDPOINT)
+	wsClient, err := ws.Connect(ctx, TEST_RPC_WS_ENDPOINT)
+	assert.Nil(t, err)
+
+	t.Run("Load", func(t *testing.T) {
+		eg := &errgroup.Group{}
+		leaderTpuService, _ := LeaderTpuServiceLoad(eg, ctx, rpcClient, wsClient, TEST_RPC_WS_ENDPOINT)
+		assert.NotNil(t, leaderTpuService)
+	})
+
 }

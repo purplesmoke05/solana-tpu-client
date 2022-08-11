@@ -178,7 +178,7 @@ func LeaderTpuServiceLoad(wg *errgroup.Group, ctx context.Context, client *rpc.C
 		wg.Go(
 			func() error {
 				return func(ctx2 context.Context, client2 *ws.Client) error {
-					subscription, err := wsClient.SlotsUpdatesSubscribe()
+					subscription, err := client2.SlotsUpdatesSubscribe()
 					if err != nil {
 						return err
 					}
