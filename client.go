@@ -10,6 +10,7 @@ import (
 	"gopkg.in/errgo.v2/errors"
 	"math"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,7 @@ type LeaderTpuCache struct {
 	lastEpochInfoSlot uint64
 	leaders           []solana.PublicKey
 	client            *rpc.Client
+	leaderTpuMapLock  sync.Mutex
 	leaderTpuMap      map[solana.PublicKey]string
 }
 
@@ -28,8 +30,9 @@ const MaxFanoutSlots = 100
 
 func NewLeaderTpuCache(client *rpc.Client, startSlot uint64) *LeaderTpuCache {
 	return &LeaderTpuCache{
-		firstSlot: startSlot,
-		client:    client,
+		firstSlot:        startSlot,
+		client:           client,
+		leaderTpuMapLock: sync.Mutex{},
 	}
 }
 
@@ -58,7 +61,9 @@ func LeaderTpuCacheLoad(ctx context.Context, client *rpc.Client, startSlot uint6
 	if err != nil {
 		return nil, err
 	}
+	leaderTpuCache.leaderTpuMapLock.Lock()
 	leaderTpuCache.leaderTpuMap = socks
+	leaderTpuCache.leaderTpuMapLock.Unlock()
 	return leaderTpuCache, nil
 }
 
@@ -226,7 +231,10 @@ func (l *LeaderTpuService) run(ctx context.Context) {
 					Get().Warn("failed to fetch cluster tpu sockets")
 					continue
 				}
+				l.leaderTpuCache.leaderTpuMapLock.Lock()
 				l.leaderTpuCache.leaderTpuMap = socks
+				l.leaderTpuCache.leaderTpuMapLock.Unlock()
+				lastClusterRefresh = time.Now()
 			}
 			estimatedCurrentSlot, err := l.recentSlots.estimateCurrentSlot()
 			if err != nil {

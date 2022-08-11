@@ -98,7 +98,7 @@ func TestTpuClient(t *testing.T) {
 	assert.Nil(t, err)
 
 	t.Run("Load", func(t *testing.T) {
-		ctxChild, cancelFunc := context.WithTimeout(ctx, 10*time.Second)
+		ctxChild, cancelFunc := context.WithTimeout(ctx, 70*time.Second)
 		defer cancelFunc()
 		eg := &errgroup.Group{}
 		cfg := &TpuClientConfig{
