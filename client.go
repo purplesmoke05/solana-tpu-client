@@ -185,14 +185,19 @@ func LeaderTpuServiceLoad(wg *errgroup.Group, ctx context.Context, client *rpc.C
 					defer subscription.Unsubscribe()
 
 					for {
-						res, err := subscription.Recv()
-						if err != nil {
-							return err
+						select {
+						case <-ctx2.Done():
+							return nil
+						default:
+							res, err := subscription.Recv()
+							if err != nil {
+								return err
+							}
+							if res.Type == "completed" {
+								res.Slot += 1
+							}
+							leaderTpuService.recentSlots.recordSlot(res.Slot)
 						}
-						if res.Type == "completed" {
-							res.Slot += 1
-						}
-						leaderTpuService.recentSlots.recordSlot(res.Slot)
 					}
 				}(ctx, wsClient)
 			})
@@ -269,10 +274,9 @@ func NewTpuClient(client *rpc.Client, cfg *TpuClientConfig) *TpuClient {
 	return &TpuClient{fanoutSlots: fanoutSlots, client: client, exit: false}
 }
 
-func TpuClientLoad(ctx context.Context, client *rpc.Client, wsClient *ws.Client, websocketUrl string, cfg *TpuClientConfig) (*TpuClient, error) {
+func TpuClientLoad(eg *errgroup.Group, ctx context.Context, client *rpc.Client, wsClient *ws.Client, websocketUrl string, cfg *TpuClientConfig) (*TpuClient, error) {
 	tpuClient := NewTpuClient(client, cfg)
-	wg := &errgroup.Group{}
-	leaderTpuService, err := LeaderTpuServiceLoad(wg, ctx, client, wsClient, websocketUrl)
+	leaderTpuService, err := LeaderTpuServiceLoad(eg, ctx, client, wsClient, websocketUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -335,13 +339,13 @@ type TpuConnection struct {
 	tpuClient *TpuClient
 }
 
-func NewTpuConnection(ctx context.Context, rpcEndpoint string, wsEndpoint string) (*TpuConnection, error) {
+func NewTpuConnection(eg *errgroup.Group, ctx context.Context, rpcEndpoint string, wsEndpoint string) (*TpuConnection, error) {
 	rpcClient := rpc.New(rpcEndpoint)
 	wsClient, err := ws.Connect(ctx, wsEndpoint)
 	if err != nil {
 		return nil, err
 	}
-	tpuClient, err := TpuClientLoad(ctx, rpcClient, wsClient, wsEndpoint, &TpuClientConfig{fanoutSlots: DefaultFanoutSlots})
+	tpuClient, err := TpuClientLoad(eg, ctx, rpcClient, wsClient, wsEndpoint, &TpuClientConfig{fanoutSlots: DefaultFanoutSlots})
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +356,6 @@ func (t *TpuConnection) SendTransaction(ctx context.Context, instructions []sola
 	return t.tpuClient.SendTransaction(ctx, instructions, signers, payer)
 }
 
-func TpuConnectionLoad(ctx context.Context, rpcEndpoint, wsEndpoint string) (*TpuConnection, error) {
-	return NewTpuConnection(ctx, rpcEndpoint, wsEndpoint)
+func TpuConnectionLoad(eg *errgroup.Group, ctx context.Context, rpcEndpoint, wsEndpoint string) (*TpuConnection, error) {
+	return NewTpuConnection(eg, ctx, rpcEndpoint, wsEndpoint)
 }

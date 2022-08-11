@@ -7,6 +7,7 @@ import (
 	"github.com/test-go/testify/assert"
 	"golang.org/x/sync/errgroup"
 	"testing"
+	"time"
 )
 
 const TEST_RPC_ENDPOINT = "https://api.mainnet-beta.solana.com/"
@@ -80,9 +81,34 @@ func TestLeaderTpuService(t *testing.T) {
 	assert.Nil(t, err)
 
 	t.Run("Load", func(t *testing.T) {
+		ctxChild, cancelFunc := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelFunc()
 		eg := &errgroup.Group{}
-		leaderTpuService, _ := LeaderTpuServiceLoad(eg, ctx, rpcClient, wsClient, TEST_RPC_WS_ENDPOINT)
+		leaderTpuService, _ := LeaderTpuServiceLoad(eg, ctxChild, rpcClient, wsClient, TEST_RPC_WS_ENDPOINT)
 		assert.NotNil(t, leaderTpuService)
+		err := eg.Wait()
+		assert.Nil(t, err)
+	})
+}
+
+func TestTpuClient(t *testing.T) {
+	ctx := context.Background()
+	rpcClient := rpc.New(TEST_RPC_ENDPOINT)
+	wsClient, err := ws.Connect(ctx, TEST_RPC_WS_ENDPOINT)
+	assert.Nil(t, err)
+
+	t.Run("Load", func(t *testing.T) {
+		ctxChild, cancelFunc := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelFunc()
+		eg := &errgroup.Group{}
+		cfg := &TpuClientConfig{
+			fanoutSlots: 400,
+		}
+		tpuClient, err := TpuClientLoad(eg, ctxChild, rpcClient, wsClient, TEST_RPC_WS_ENDPOINT, cfg)
+		assert.NotNil(t, tpuClient)
+		assert.Nil(t, err)
+		err = eg.Wait()
+		assert.Nil(t, err)
 	})
 
 }
