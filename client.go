@@ -35,7 +35,7 @@ func NewLeaderTpuCache(client *rpc.Client, startSlot uint64) *LeaderTpuCache {
 
 func (l *LeaderTpuCache) fetchSlotLeaders(ctx context.Context, startSlot uint64, slotsInEpoch uint64) ([]solana.PublicKey, error) {
 	fanout := math.Min(2*MaxFanoutSlots, float64(slotsInEpoch))
-	leaders, err := l.client.GetSlotLeaders(ctx, startSlot, startSlot+uint64(fanout))
+	leaders, err := l.client.GetSlotLeaders(ctx, startSlot, uint64(fanout))
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,9 @@ func (l *LeaderTpuCache) fetchClusterTpuSockets(ctx context.Context) (map[solana
 	}
 	ret := make(map[solana.PublicKey]string)
 	for _, n := range nodes {
-		ret[n.Pubkey] = *n.TPU
+		if n.TPU != nil {
+			ret[n.Pubkey] = *n.TPU
+		}
 	}
 	return ret, nil
 }
@@ -81,7 +83,11 @@ func (l *LeaderTpuCache) lastSlot() uint64 {
 func (l *LeaderTpuCache) getSlotLeader(slot uint64) *solana.PublicKey {
 	if slot > l.firstSlot {
 		index := slot - l.firstSlot
-		return &l.leaders[index]
+		for i := range l.leaders {
+			if uint64(i) == index {
+				return &l.leaders[index]
+			}
+		}
 	}
 	return nil
 }
